@@ -1,81 +1,90 @@
+FROM ubuntu:20.04
 
-name: Build Docker Image and Push to AWS ECR
+# Build Arguments
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+ARG AIRFLOW_VERSION=2.10.1  # Set Airflow version
 
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - input.txt
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV AWS_DEFAULT_REGION=us-east-1
+ENV AIRFLOW_HOME=/root/airflow
 
-env:
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  ECR_REGISTRY: 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev
-  AIRFLOW_VERSION: '2.10.1'  # Set the target Airflow version here
+# Install system dependencies and Python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        apt-utils \
+        vim \
+        unzip \
+        git \
+        default-jre \
+        gcc \
+        g++ \
+        libpq-dev \
+        freetds-bin \
+        krb5-user \
+        ldap-utils \
+        libsasl2-2 \
+        libsasl2-modules \
+        libssl1.1 \
+        locales \
+        lsb-release \
+        sasl2-bin \
+        sqlite3 \
+        unixodbc \
+        postgresql \
+        postgresql-contrib \
+        python3-pip \
+        python3.8-venv \
+        net-tools \
+        jq \
+        parallel \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# Install and configure PostgreSQL
+USER postgres
+RUN /etc/init.d/postgresql start && \
+    psql -c "CREATE DATABASE airflow_db;" && \
+    psql -c "CREATE USER airflow_user WITH PASSWORD 'airflow_pass';" && \
+    psql -c "GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow_user;"
 
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v2
-      
-    - name: Read Input file
-      run: |
-        echo "previous_version=$(cat input.txt | awk 'NR==1')" >> $GITHUB_ENV
-        echo "previous_install=$(cat input.txt | awk 'NR==2')" >> $GITHUB_ENV
-        echo "upgrade_version=$(cat input.txt | awk 'NR==3')" >> $GITHUB_ENV
-        echo "upgrade_install=$(cat input.txt | awk 'NR==4')" >> $GITHUB_ENV
-        cat input.txt | awk 'NR==1'
-        cat input.txt | awk 'NR==2'
-        cat input.txt | awk 'NR==3'
-        cat input.txt | awk 'NR==4'
-        
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-        
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-    
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: airflow-dev
-        AIRFLOW_VERSION: ${{ env.AIRFLOW_VERSION }}
-        
-      run: |
-        # Pull the existing image from ECR
-        docker pull 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:latest
-        
-        # Tag the pulled image with the previous version
-        docker tag 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:latest 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:${{env.previous_version}}
-        
-        # Build new image based on Airflow version defined in the env
-        docker build \
-          --build-arg AIRFLOW_VERSION=${{ env.AIRFLOW_VERSION }} \
-          --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-          --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-          -t ${{env.upgrade_version}} .
+USER root
 
-        docker image ls  # Verify the new image is built
+# Copy necessary files into the container
+COPY input.txt /input.txt
+COPY installairflow.sh /installairflow.sh
+COPY airflow.cfg /airflow.cfg
+COPY requirement.txt /requirement.txt
+COPY entrypoint.sh /entrypoint.sh
 
-        # Tag the newly built image as 'latest' for pushing to ECR
-        docker tag ${{env.upgrade_version}}:latest 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:latest
-        
-        # Verify the tag is applied
-        docker image ls
-        
-        # Optionally, delete the previous 'latest' image from ECR (cleanup)
-        aws ecr batch-delete-image --repository-name airflow-dev --image-ids imageTag=latest
+# Make scripts executable
+RUN chmod +x /installairflow.sh /entrypoint.sh
 
-        # Push the newly built image to ECR
-        docker push 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:latest
-        docker push 250245842722.dkr.ecr.us-east-1.amazonaws.com/airflow-dev:${{env.previous_version}}
+# Read Airflow version from input.txt (if dynamic)
+RUN airflow_link="$(awk 'NR==4' /input.txt)" && echo $airflow_link
 
+# Install Airflow and dependencies
+RUN ./installairflow.sh && \
+    pip install "apache-airflow==$AIRFLOW_VERSION" --no-cache-dir && \
+    pip install -r /requirement.txt --no-cache-dir
+
+# AWS Configuration
+RUN aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID && \
+    aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY && \
+    aws configure set default.region us-east-1
+
+# S3 sync or download from S3
+RUN aws s3 cp s3://idms-2722-airflow-release/$(aws s3 ls s3://idms-2722-airflow-release/ | sort | tail -n 1 | awk '{print $NF}') variables.json . && \
+    aws s3 cp s3://idms-2722-airflow-release/$(aws s3 ls s3://idms-2722-airflow-release/ | sort | tail -n 1 | awk '{print $NF}') connections.json . 
+
+# Set up Airflow database
+RUN airflow db init
+
+# Create necessary directories
+RUN mkdir -p $AIRFLOW_HOME/dags
+
+# Copy configuration and entrypoint script
+RUN cp /airflow.cfg /root/airflow/airflow.cfg
+
+# Set entrypoint
+ENTRYPOINT ["sh", "-c", "/entrypoint.sh"]
