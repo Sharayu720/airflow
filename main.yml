@@ -1,1 +1,45 @@
 
+name: Deploy Apache Airflow to EC2
+
+on:
+  push:
+    branches:
+      - airflow-setup  # Trigger deployment only on the airflow-setup branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # Your SSH private key for EC2 access
+
+      - name: Copy files to EC2
+        run: |
+          scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ airflow-user@your-ec2-public-ip:/home/airflow-user/
+
+      - name: SSH into EC2 and Deploy
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no airflow-user@your-ec2-public-ip <<EOF
+            # Navigate to the Airflow setup directory
+            cd ~/airflow-setup
+            
+            # Create and activate the virtual environment
+            python3 -m venv airflow_env
+            source airflow_env/bin/activate
+            
+            # Install dependencies
+            pip install -r requirements.txt
+            
+            # Initialize Airflow database if it doesn't exist
+            airflow db init
+            
+            # Restart Airflow webserver and scheduler
+            systemctl restart airflow-webserver
+            systemctl restart airflow-scheduler
+          EOF
