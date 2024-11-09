@@ -1,1 +1,26 @@
-# airflow
+# Apache Airflow Setup on EC2
+
+This repository contains the setup for **Apache Airflow 2.10.1** deployed on an EC2 instance. The setup includes:
+
+- Airflow configuration and setup
+- GitHub Actions CI/CD pipeline to deploy to EC2
+- Example DAGs to test the setup
+
+## Setup Instructions
+
+1. Clone this repository.
+2. Set up an EC2 instance with the necessary dependencies (Python, Airflow, etc.).
+3. Set up **GitHub Actions** to deploy changes to EC2.
+4. Create your own DAGs in the `dags/` folder.
+
+## Files:
+
+- `requirements.txt`: Lists Python dependencies for Airflow.
+- `entrypoint.sh`: Script to set up and start Airflow on EC2.
+- `.github/workflows/deploy.yml`: GitHub Actions CI/CD pipeline for deployment.
+- `dags/`: Folder to store your Airflow DAGs.
+
+## Deployment
+
+When you push changes to the `airflow-setup` branch, GitHub Actions will automatically deploy the updates to the EC2 instance.
+
