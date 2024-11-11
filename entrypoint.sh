@@ -1,35 +1,57 @@
+---
+- name: Setup Airflow and Nginx with Reverse Proxy
+  hosts: your-ec2-instance  # Target EC2 host (or group of hosts)
+  become: yes  # This allows privilege escalation (root permissions)
 
-#!/bin/bash
+  tasks:
 
-# Update and install any required packages
-sudo yum update -y
-sudo yum install -y python3 gcc gcc-c++ libpq-dev
+    # Install Nginx
+    - name: Install Nginx if not installed
+      yum:
+        name: nginx
+        state: present
 
-# Install virtualenv if not installed
-pip3 install virtualenv
+    # Ensure Nginx is started and enabled to start on boot
+    - name: Ensure Nginx is running and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: yes
 
-# Set up Airflow environment (if not done already)
-AIRFLOW_HOME=~/airflow
-AIRFLOW_VENV=~/airflow_env
+    # Upload the nginx configuration file (make sure nginx.conf is configured)
+    - name: Upload nginx configuration
+      copy:
+        src: nginx.conf  # Path to your custom Nginx config file
+        dest: /etc/nginx/nginx.conf  # Replace the default config with your own
+        owner: root
+        group: root
+        mode: '0644'
 
-# Create the virtual environment if it doesn't exist
-if [ ! -d "$AIRFLOW_VENV" ]; then
-    python3 -m venv $AIRFLOW_VENV
-fi
+    # Reload Nginx to apply the new configuration
+    - name: Reload Nginx to apply the configuration
+      service:
+        name: nginx
+        state: reloaded
 
-# Activate the virtual environment
-source $AIRFLOW_VENV/bin/activate
+    # Install Python dependencies (Airflow and other packages)
+    - name: Install Airflow dependencies
+      pip:
+        requirements: /home/ec2-user/airflow-setup/requirements.txt
+        virtualenv: /home/ec2-user/airflow_env
 
-# Install required Python dependencies
-pip install -r ~/airflow-setup/requirements.txt
+    # Initialize the Airflow database if it hasn't been initialized
+    - name: Initialize the Airflow database
+      command: airflow db init
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if airflow.db doesn't exist
 
-# Initialize Airflow database if it hasn't been initialized already
-if [ ! -f "$AIRFLOW_HOME/airflow.db" ]; then
-    airflow db init
-fi
+    # Start Airflow webserver and scheduler
+    - name: Start Airflow webserver
+      command: airflow webserver -D
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if webserver is not already started
 
-# Start the Airflow webserver and scheduler
-airflow webserver -D  # Starts the webserver as a daemon (in background)
-airflow scheduler -D  # Starts the scheduler as a daemon (in background)
-
-echo "Airflow is set up and running."
+    - name: Start Airflow scheduler
+      command: airflow scheduler -D
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if scheduler is not already started
