@@ -1,22 +1,32 @@
-
 #!/bin/bash
 
-# Install system dependencies
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-dev build-essential libpq-dev
+# Install Nginx if not installed
+sudo yum install -y nginx
 
-# Install Airflow (in a virtual environment)
-python3 -m venv airflow-env
-source airflow-env/bin/activate
+# Start and enable Nginx to start on boot
+sudo systemctl start nginx
+sudo systemctl enable nginx
 
-# Install Airflow and other dependencies
-pip install apache-airflow==2.10.1
+# Install Python dependencies and setup Airflow environment (assuming it's already done)
+pip3 install virtualenv
 
-# Initialize the Airflow database (this will create the airflow.cfg file)
-airflow db init
+# Activate the Airflow virtual environment
+source ~/airflow_env/bin/activate
 
-# Optionally, start Airflow webserver and scheduler
+# Install the required Python packages (already exists in your repo)
+pip install -r ~/airflow-setup/requirements.txt
+
+# Initialize Airflow database if it hasn't been initialized already
+if [ ! -f "$AIRFLOW_HOME/airflow.db" ]; then
+    airflow db init
+fi
+
+# Ensure the Nginx service is started and enabled
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# Optionally start Airflow webserver and scheduler as background processes
 airflow webserver -D
 airflow scheduler -D
 
-echo "Airflow installed and running."
+echo "Airflow and Nginx are set up and running."
