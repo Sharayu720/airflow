@@ -1,57 +1,27 @@
----
-- name: Setup Airflow and Nginx with Reverse Proxy
-  hosts: your-ec2-instance  # Target EC2 host (or group of hosts)
-  become: yes  # This allows privilege escalation (root permissions)
+#!/bin/bash
 
-  tasks:
+# Update and install necessary packages
+sudo yum update -y
+sudo yum install -y python3 gcc gcc-c++ libpq-dev nginx
 
-    # Install Nginx
-    - name: Install Nginx if not installed
-      yum:
-        name: nginx
-        state: present
+# Start Nginx and enable it to start on boot
+sudo systemctl start nginx
+sudo systemctl enable nginx
 
-    # Ensure Nginx is started and enabled to start on boot
-    - name: Ensure Nginx is running and enabled
-      service:
-        name: nginx
-        state: started
-        enabled: yes
+# Activate the Airflow virtual environment
+source ~/airflow_env/bin/activate
 
-    # Upload the nginx configuration file (make sure nginx.conf is configured)
-    - name: Upload nginx configuration
-      copy:
-        src: nginx.conf  # Path to your custom Nginx config file
-        dest: /etc/nginx/nginx.conf  # Replace the default config with your own
-        owner: root
-        group: root
-        mode: '0644'
+# Install required Python dependencies (Airflow and other packages)
+pip install -r ~/airflow-setup/requirements.txt
 
-    # Reload Nginx to apply the new configuration
-    - name: Reload Nginx to apply the configuration
-      service:
-        name: nginx
-        state: reloaded
+# Initialize Airflow database if it hasn't been initialized already
+if [ ! -f "$AIRFLOW_HOME/airflow.db" ]; then
+    airflow db init
+fi
 
-    # Install Python dependencies (Airflow and other packages)
-    - name: Install Airflow dependencies
-      pip:
-        requirements: /home/ec2-user/airflow-setup/requirements.txt
-        virtualenv: /home/ec2-user/airflow_env
+# Start Airflow webserver and scheduler as background processes
+airflow webserver -D  # Starts the webserver in the background
+airflow scheduler -D  # Starts the scheduler in the background
 
-    # Initialize the Airflow database if it hasn't been initialized
-    - name: Initialize the Airflow database
-      command: airflow db init
-      args:
-        creates: /home/ec2-user/airflow/airflow.db  # Only runs if airflow.db doesn't exist
-
-    # Start Airflow webserver and scheduler
-    - name: Start Airflow webserver
-      command: airflow webserver -D
-      args:
-        creates: /home/ec2-user/airflow/airflow.db  # Only runs if webserver is not already started
-
-    - name: Start Airflow scheduler
-      command: airflow scheduler -D
-      args:
-        creates: /home/ec2-user/airflow/airflow.db  # Only runs if scheduler is not already started
+# Ensure Nginx is running as a reverse proxy
+echo "Airflow and Nginx are now set up and running."
