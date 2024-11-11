@@ -1,26 +1,33 @@
-# Apache Airflow Setup on EC2
+# Airflow Setup with Nginx Reverse Proxy
 
-This repository contains the setup for **Apache Airflow 2.10.1** deployed on an EC2 instance. The setup includes:
+## Prerequisites
 
-- Airflow configuration and setup
-- GitHub Actions CI/CD pipeline to deploy to EC2
-- Example DAGs to test the setup
+- EC2 instance with Ubuntu or CentOS-based OS.
+- Airflow is already set up in a virtual environment.
+- You have Nginx installed on the system or it's installed using `installairflow.sh`.
 
-## Setup Instructions
+## Nginx Configuration
 
-1. Clone this repository.
-2. Set up an EC2 instance with the necessary dependencies (Python, Airflow, etc.).
-3. Set up **GitHub Actions** to deploy changes to EC2.
-4. Create your own DAGs in the `dags/` folder.
+Nginx is configured to reverse proxy Airflow. The following settings are required:
 
-## Files:
+1. **Update Airflow's `airflow.cfg`**:
+   - Set `web_server_host = 0.0.0.0` to allow Airflow to listen on all interfaces.
+   - Set `base_url` to your domain (e.g., `http://your-domain.com`).
 
-- `requirements.txt`: Lists Python dependencies for Airflow.
-- `entrypoint.sh`: Script to set up and start Airflow on EC2.
-- `.github/workflows/deploy.yml`: GitHub Actions CI/CD pipeline for deployment.
-- `dags/`: Folder to store your Airflow DAGs.
+2. **Configure Nginx**:
+   - The Nginx configuration should forward traffic from `http://your-domain.com` to the Airflow webserver running on `http://127.0.0.1:8080`.
 
-## Deployment
+   Example Nginx configuration (`/etc/nginx/nginx.conf`):
+   ```nginx
+   server {
+       listen 80;
+       server_name your-domain.com;
 
-When you push changes to the `airflow-setup` branch, GitHub Actions will automatically deploy the updates to the EC2 instance.
-
+       location / {
+           proxy_pass http://127.0.0.1:8080;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
