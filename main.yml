@@ -1,45 +1,57 @@
+---
+- name: Setup Airflow and Nginx with Reverse Proxy
+  hosts: your-ec2-instance  # Target EC2 host (or group of hosts)
+  become: yes  # This allows privilege escalation (root permissions)
 
-name: Deploy Apache Airflow to EC2
+  tasks:
 
-on:
-  push:
-    branches:
-      - airflow-setup  # Trigger deployment only on the airflow-setup branch
+    # Install Nginx
+    - name: Install Nginx if not installed
+      yum:
+        name: nginx
+        state: present
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    # Ensure Nginx is started and enabled to start on boot
+    - name: Ensure Nginx is running and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: yes
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    # Upload the nginx configuration file (make sure nginx.conf is configured)
+    - name: Upload nginx configuration
+      copy:
+        src: nginx.conf  # Path to your custom Nginx config file
+        dest: /etc/nginx/nginx.conf  # Replace the default config with your own
+        owner: root
+        group: root
+        mode: '0644'
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # Your SSH private key for EC2 access
+    # Reload Nginx to apply the new configuration
+    - name: Reload Nginx to apply the configuration
+      service:
+        name: nginx
+        state: reloaded
 
-      - name: Copy files to EC2
-        run: |
-          scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ airflow-user@your-ec2-public-ip:/home/airflow-user/
+    # Install Python dependencies (Airflow and other packages)
+    - name: Install Airflow dependencies
+      pip:
+        requirements: /home/ec2-user/airflow-setup/requirements.txt
+        virtualenv: /home/ec2-user/airflow_env
 
-      - name: SSH into EC2 and Deploy
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no airflow-user@your-ec2-public-ip <<EOF
-            # Navigate to the Airflow setup directory
-            cd ~/airflow-setup
-            
-            # Create and activate the virtual environment
-            python3 -m venv airflow_env
-            source airflow_env/bin/activate
-            
-            # Install dependencies
-            pip install -r requirements.txt
-            
-            # Initialize Airflow database if it doesn't exist
-            airflow db init
-            
-            # Restart Airflow webserver and scheduler
-            systemctl restart airflow-webserver
-            systemctl restart airflow-scheduler
-          EOF
+    # Initialize the Airflow database if it hasn't been initialized
+    - name: Initialize the Airflow database
+      command: airflow db init
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if airflow.db doesn't exist
+
+    # Start Airflow webserver and scheduler
+    - name: Start Airflow webserver
+      command: airflow webserver -D
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if webserver is not already started
+
+    - name: Start Airflow scheduler
+      command: airflow scheduler -D
+      args:
+        creates: /home/ec2-user/airflow/airflow.db  # Only runs if scheduler is not already started
