@@ -3,7 +3,7 @@ name: Deploy Apache Airflow
 on:
   push:
     branches:
-      - test  # Trigger on push to 'test' branch
+      - test  # Trigger on push to the 'test' branch
 
 jobs:
   setup:
@@ -33,9 +33,9 @@ jobs:
         run: |
           source airflow_venv/bin/activate
           export AIRFLOW_HOME=/home/ubuntu/airflow  # Set Airflow home directory
-          airflow db init  # Initialize Airflow database
+          airflow db init  # Initialize the Airflow database
 
-      # Step 5: Create Airflow Admin User (optional)
+      # Step 5: Create Airflow Admin User (optional but recommended)
       - name: Create Airflow Admin User
         run: |
           source airflow_venv/bin/activate
@@ -47,13 +47,19 @@ jobs:
             --role Admin \
             --password admin123
 
-      # Step 6: Start Airflow Webserver and Scheduler
+      # Step 6: Start Airflow Webserver
       - name: Start Airflow Webserver
         run: |
           source airflow_venv/bin/activate
-          nohup airflow webserver -p 8080 &  # Start the webserver
+          nohup airflow webserver -p 8080 &  # Start the webserver in the background
 
+      # Step 7: Start Airflow Scheduler
       - name: Start Airflow Scheduler
         run: |
           source airflow_venv/bin/activate
-          nohup airflow scheduler &  # Start the scheduler
+          nohup airflow scheduler &  # Start the scheduler in the background
+          
+      # Optional: Ensure that Nginx is configured properly to forward requests to the Airflow webserver
+      # (You'll need to configure Nginx on your server separately, this step ensures the reverse proxy setup works)
+
+      # Add any other necessary steps based on your infrastructure or configurations.
