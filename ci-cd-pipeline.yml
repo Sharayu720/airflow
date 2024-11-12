@@ -1,48 +1,59 @@
-name: CI/CD Pipeline for Airflow
+name: Deploy Apache Airflow
 
 on:
   push:
     branches:
-      - main
-    paths:
-      - '**/*.py'
-      - '**/*.sh'
-      - 'requirements.txt'
-      - 'airflow.cfg'
-      - 'dags/**'
+      - test  # Trigger on push to 'test' branch
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # The type of VM the job will run on (Ubuntu in this case)
+
     steps:
-      - name: Checkout repository
+      # Step 1: Checkout the code
+      - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
+      # Step 2: Set up Python environment
+      - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m venv airflow_venv  # Create a virtual environment
+          source airflow_venv/bin/activate  # Activate the virtual environment
+          pip install --upgrade pip  # Upgrade pip to the latest version
+          pip install -r requirements.txt  # Install dependencies
 
-  deploy:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      # Step 4: Set up Airflow Database
+      - name: Set up Airflow Database
+        run: |
+          source airflow_venv/bin/activate
+          export AIRFLOW_HOME=/home/ubuntu/airflow  # Set Airflow home directory
+          airflow db init  # Initialize Airflow database
 
-      - name: SSH to EC2 and deploy
-        uses: appleboy/ssh-action@v0.1.1
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo systemctl stop nginx
-            sudo cp -r ~/airflow/dags/* /home/ec2-user/airflow/dags/
-            sudo cp -r ~/airflow/airflow.cfg /home/ec2-user/airflow/airflow.cfg
-            sudo systemctl start nginx
+      # Step 5: Create Airflow Admin User (optional)
+      - name: Create Airflow Admin User
+        run: |
+          source airflow_venv/bin/activate
+          airflow users create \
+            --username admin \
+            --firstname John \
+            --lastname Doe \
+            --email john.doe@example.com \
+            --role Admin \
+            --password admin123
+
+      # Step 6: Start Airflow Webserver and Scheduler
+      - name: Start Airflow Webserver
+        run: |
+          source airflow_venv/bin/activate
+          nohup airflow webserver -p 8080 &  # Start the webserver
+
+      - name: Start Airflow Scheduler
+        run: |
+          source airflow_venv/bin/activate
+          nohup airflow scheduler &  # Start the scheduler
