@@ -27,38 +27,12 @@ jobs:
 
       - name: SSH to EC2 instance and configure Airflow
         run: |
-          # Hard-code private SSH key and set appropriate permissions
-          echo "-----BEGIN RSA PRIVATE KEY-----
-MIIEpQIBAAKCAQEAy/FDNsS5cpU4hX/VAaBiC+t5AU55SFNOY9fySlTF3zlz9Nt6
-K5fUhpfrVx6lfwKMewlRMMjy5yMRvHqjfp4ju/fF/tpflerA0hFOtSfv9brpESB6
-fWIJu1RTQ7w2/wRsLTgq9QGxZ045DrdqZqsubMwn28AL3kI1BVbI2XlSPgKzVZoX
-+nqKfZ2NO1eVtzskVJcx87jEz+WFnJzLempjbgogXQqPqcSr/QiTdTiiwoLOJvmB
-EAV9q+8wgU1m/2IDHC3PI7zEOW3UslYTYvbvloSQIuLBfCPSqKrFvVp+x+ghGAUw
-Z82x4+y/tZk/HkBWUCJFRq8x8ph5C5j678WlzQIDAQABAoIBAQDAkyTgxopGhFlG
-1hqQ2p06nDM65JrpjKBs7zC+t6XQzzOLduO53ji0jyeOsEWd1Q5J79ZWtqmHUDoj
-O7q+iR09FQ5FRHcV3QIOWoFz1i5kXwZNQdnoI3cFCO9G+qcDz21Glc8aY2rdHaQL
-HW6/W80Otwi8HHAYg3QFgplNoZ3jJoGm8BIVazyiTVpTTugIylLktsAFiliPcaUD
-4RVPSQyfsFSiWSmfVEXzV5IRcO2RbXAnikalXwCpS849lAPN1Upxlu3/uyEHPFkT
-HmQPcTruMFONtb3mK103ajzYtZQ1h/J4aDXYTdTHn6iG7AxxTg+jcaQ8FVMouMDG
-QfjxNUABAoGBAO+Y30XVA1asOTgbbRgmJ3hD9403zSAAxg9BiUTSacdo8/S9xmxx
-cjGIMvqo78AV/TohfSVpv3jS7fAHlMbunl0cUXqL3WmOoU2sWlEAmUOMOBb1oZVl
-SYF7FkgdwZeRc6Y36Zfa6KCxTGyoBebtnScnFXypdpxF79nNApjEzYHNAoGBANnn
-g279cwYofNHSH35Yfhqz50oSRRrua74Uwk7XZmhS3tomVSXqRzzR8EPTErsd215J
-+wzN2OpjPMHRfoGT/qM9oBFRfjg5EKrEbRPBV0IsoxLXVjSHVa2deUUJZ+dIV31O
-bsTPy8dbz2Z3+JDO+5MqK3rV8CDLPPGnL8+2hLQBAoGBAMJ1KlD873a61L3K1KIS
-5Vngn9wHe/4LYrQjFou60os7jTQHijGdaXb1+Zoi3mLh9eHmKDHjP7mKR/7VyFQk
-endLcn2pYow3bIcj6TFw8PM3rJZFyVz9Fcl24sCpFeQz8s7m9jl/O+qfu008mX2x
-QCj0uaWxzEhNIrt8fi0LHVfJAoGASanNMdk2aE+Jmrjo8qJhxw8oUk8I04jkHXcR
-FOwWb5AMTD0HLfEcMgBas+MIAv+d6CskVnjEKsBviqoSlSV9wJuVoCUngUQxUTlk
-Enia0gEbA8SOHOXfXfjNRTxfxr0a7n50Tc5dekCcRWyrN/Dw9RgdaMIoEj4ClULK
-k/KEvAECgYEA6ibbH6rIQzX5y1LgZLlsy2n93Qg7eMk2YzXfiTGSM45CgyxFXbCE
-lRWuF10LwKzBFJG/2h4Gdax6gUwCndxOQM68ZnboCiSsBc2c+Ahumw4WfIZWdSF6
-LddRUD3Es9/qvzhrWiyDvr+hyOajVyo9rUgJNsanpydvER1XU2OdKyk=
------END RSA PRIVATE KEY-----" > /tmp/id_rsa
+          # Save private SSH key to file and set appropriate permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           
           # SSH into EC2 instance and execute setup commands
-          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@10.251.158.29 << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -71,9 +45,39 @@ LddRUD3Es9/qvzhrWiyDvr+hyOajVyo9rUgJNsanpydvER1XU2OdKyk=
             airflow db init
 
             echo "Creating Airflow Admin user..."
-            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password "your_admin_password_here"
+            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password "${{ secrets.AIRFLOW_ADMIN_PASSWORD }}"
 
             echo "Starting Airflow Webserver and Scheduler..."
             nohup airflow webserver -p 8080 &
             nohup airflow scheduler &
           EOF
+
+      - name: Upload DAGs to EC2 instance
+        run: |
+          # Save private key to file and set appropriate permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          
+          # Upload DAGs to EC2 instance
+          scp -o StrictHostKeyChecking=no -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
+
+      - name: Restart Airflow Services
+        run: |
+          # Restart Airflow webserver and scheduler
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
+
+      - name: Check Airflow Webserver Health
+        run: |
+          echo "Waiting for Airflow Webserver to be ready..."
+          for i in {1..10}; do
+            if curl --silent --fail http://localhost:8080; then
+              echo "Airflow Webserver is up and running!"
+              exit 0
+            else
+              echo "Attempt $i: Airflow Webserver is not ready yet. Retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          echo "Airflow Webserver is still not ready after 10 attempts."
+          exit 1
