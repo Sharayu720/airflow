@@ -25,7 +25,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: SSH to EC2 instance and configure Airflow
+         - name: SSH to EC2 instance and configure Airflow
         run: |
           # Hard-code private SSH key and set appropriate permissions
           echo "-----BEGIN RSA PRIVATE KEY-----
