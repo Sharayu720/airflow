@@ -56,19 +56,32 @@ jobs:
           sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/
           sudo systemctl restart nginx
 
-      # Step 7: Start Airflow Webserver
+      # Step 7: Create necessary directories and set permissions
+      - name: Set up directories and permissions for Airflow
+        run: |
+          # Create the necessary directories for Airflow logs
+          sudo mkdir -p /home/ubuntu/airflow/logs/scheduler
+          sudo mkdir -p /home/ubuntu/airflow/logs/webserver
+
+          # Set ownership for the directories to the ubuntu user
+          sudo chown -R ubuntu:ubuntu /home/ubuntu/airflow
+
+          # Grant full permissions to the logs directory for readability/writing
+          sudo chmod -R 777 /home/ubuntu/airflow/logs
+
+      # Step 8: Start Airflow Webserver
       - name: Start Airflow Webserver
         run: |
           source airflow_venv/bin/activate
           nohup airflow webserver -p 8080 &
 
-      # Step 8: Start Airflow Scheduler
+      # Step 9: Start Airflow Scheduler
       - name: Start Airflow Scheduler
         run: |
           source airflow_venv/bin/activate
           nohup airflow scheduler &
 
-      # Step 9: Upload DAG files to EC2 instance
+      # Step 10: Upload DAG files to EC2 instance
       - name: Upload DAGs to EC2 instance
         run: |
           # Load the SSH private key from GitHub secrets
@@ -83,13 +96,25 @@ jobs:
           # Upload DAGs to EC2 instance (Use ec2-user for EC2)
           scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ubuntu/airflow/dags/
 
-      # Step 10: Restart Airflow Services (optional)
+      # Step 11: Restart Airflow Services (optional)
       - name: Restart Airflow Services
         run: |
           sudo systemctl restart airflow-webserver
           sudo systemctl restart airflow-scheduler
 
-      # Step 11: Health check (optional)
+      # Step 12: Health check (optional)
       - name: Check Airflow Webserver Health
         run: |
-          curl --fail http://localhost:8080 || exit 1
+          # Wait for the Airflow webserver to start and respond
+          echo "Waiting for Airflow Webserver to be ready..."
+          for i in {1..10}; do
+            if curl --silent --fail http://localhost:8080; then
+              echo "Airflow Webserver is up and running!"
+              exit 0
+            else
+              echo "Attempt $i: Airflow Webserver is not ready yet. Retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          echo "Airflow Webserver is still not ready after 10 attempts."
+          exit 1
