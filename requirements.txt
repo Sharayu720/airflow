@@ -1,4 +1,4 @@
-apache-airflow==2.6.1
-psycopg2-binary  # If you're using PostgreSQL as the database backend
-apache-airflow-providers-http  # If you're using HTTP operator
-airflow[postgres]  # Install Airflow with PostgreSQL support
+apache-airflow==2.6.1  # Airflow version you want to use
+psycopg2-binary==2.9.10  # PostgreSQL driver
+apache-airflow-providers-http==4.13.2  # HTTP provider for Airflow
+# Add other dependencies as necessary
