@@ -32,7 +32,7 @@ jobs:
       - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ubuntu/airflow
+          export AIRFLOW_HOME=/home/ec2-user/airflow
           airflow db init
 
       # Step 5: Create Airflow Admin User
@@ -59,15 +59,15 @@ jobs:
       # Step 7: Create necessary directories and set permissions
       - name: Set up directories and permissions for Airflow
         run: |
-          # Create the necessary directories for Airflow logs
-          sudo mkdir -p /home/ubuntu/airflow/logs/scheduler
-          sudo mkdir -p /home/ubuntu/airflow/logs/webserver
+          # Create the Airflow log directories for the EC2 user
+          sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
+          sudo mkdir -p /home/ec2-user/airflow/logs/webserver
 
-          # Set ownership for the directories to the ubuntu user
-          sudo chown -R ubuntu:ubuntu /home/ubuntu/airflow
+          # Set ownership for the entire /home/ec2-user/airflow directory to ec2-user
+          sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
 
           # Grant full permissions to the logs directory for readability/writing
-          sudo chmod -R 777 /home/ubuntu/airflow/logs
+          sudo chmod -R 777 /home/ec2-user/airflow/logs
 
       # Step 8: Start Airflow Webserver
       - name: Start Airflow Webserver
@@ -89,12 +89,12 @@ jobs:
           chmod 600 /tmp/id_rsa
 
           # Clone the repository using SSH with the private key
-          git clone git@github.com:Sharayu720.git /home/ubuntu/airflow/dags/airflow
-          cd /home/ubuntu/airflow/dags/airflow
+          git clone git@github.com:Sharayu720.git /home/ec2-user/airflow/dags/airflow
+          cd /home/ec2-user/airflow/dags/airflow
           git checkout test  # Checkout the 'test' branch
 
           # Upload DAGs to EC2 instance (Use ec2-user for EC2)
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ubuntu/airflow/dags/
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ec2-user/airflow/dags/
 
       # Step 11: Restart Airflow Services (optional)
       - name: Restart Airflow Services
