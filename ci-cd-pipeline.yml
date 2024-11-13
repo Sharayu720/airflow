@@ -47,7 +47,7 @@ jobs:
             --role Admin \
             --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
 
-      # Step 6: Configure Nginx for Reverse Proxy
+      # Step 6: Install and Configure Nginx for Reverse Proxy
       - name: Install and Configure Nginx
         run: |
           sudo apt-get update
@@ -71,6 +71,7 @@ jobs:
       # Step 9: Upload DAG files to EC2 instance
       - name: Upload DAGs to EC2 instance
         run: |
+          # Ensure to set the correct path to your private key file and EC2 instance details
           scp -i /path/to/your/key.pem -r ./dags/ ubuntu@your-ec2-ip:/home/ubuntu/airflow/dags/
 
       # Step 10: Restart Airflow Services (optional)
