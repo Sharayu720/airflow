@@ -3,24 +3,21 @@ name: Deploy Apache Airflow to Test Environment
 on:
   push:
     branches:
-      - test  # Trigger on push to the 'test' branch
+      - test
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest  # GitHub-hosted runner (you can also use a different runner for local CI/CD pipelines)
+    runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Step 2: Set up Python environment (on GitHub runner)
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
 
-      # Step 3: Install dependencies (on GitHub runner)
       - name: Install dependencies
         run: |
           python -m venv airflow_venv
@@ -28,64 +25,42 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: SSH to EC2 instance for further setup
       - name: SSH to EC2 instance and configure Airflow
         run: |
-          # Add the private key for SSH access to EC2 (stored as a secret)
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
-
-          # SSH into the EC2 instance using the private key and ec2-user
           ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
-            # Set up Airflow directories and permissions on the EC2 instance
+            echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
-
-            # Ensure the Airflow home directory is properly set
-            sudo mkdir -p /home/ec2-user/airflow  # Create if it doesn't exist
             sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
-            sudo chmod -R 755 /home/ec2-user/airflow
-
-            # Set permissions for log directories
             sudo chmod -R 777 /home/ec2-user/airflow/logs
 
-            # Initialize Airflow DB if it hasn't been initialized
+            echo "Initializing Airflow DB..."
             source /home/ec2-user/airflow/airflow_venv/bin/activate
             export AIRFLOW_HOME=/home/ec2-user/airflow
             airflow db init
 
-            # Create Airflow Admin user
-            airflow users create \
-              --username admin \
-              --firstname John \
-              --lastname Doe \
-              --email john.doe@example.com \
-              --role Admin \
-              --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
+            echo "Creating Airflow Admin user..."
+            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
 
-            # Start the Airflow webserver and scheduler (background process)
+            echo "Starting Airflow Webserver and Scheduler..."
             nohup airflow webserver -p 8080 &
             nohup airflow scheduler &
 
           EOF
 
-      # Step 5: Upload DAGs to the EC2 instance (if needed)
       - name: Upload DAGs to EC2 instance
         run: |
-          # Use SCP to upload DAG files from GitHub to EC2
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
-
-          # Clone repository or push DAG files via SCP
           scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/airflow/dags/
 
-      # Step 6: Restart Airflow services on EC2 (optional)
       - name: Restart Airflow Services
         run: |
           ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-webserver"
           ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-scheduler"
 
-      # Step 7: Health check (optional)
       - name: Check Airflow Webserver Health
         run: |
           echo "Waiting for Airflow Webserver to be ready..."
