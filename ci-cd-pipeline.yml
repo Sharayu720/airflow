@@ -32,7 +32,7 @@ jobs:
       - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ec2-user/airflow  # Ensure we're using the correct directory path
+          export AIRFLOW_HOME=/home/ubuntu/airflow  # Ensure we're using the correct directory path
           airflow db init
 
       # Step 5: Create Airflow Admin User
@@ -59,15 +59,18 @@ jobs:
       # Step 7: Create necessary directories and set permissions
       - name: Set up directories and permissions for Airflow
         run: |
-          # Create the necessary directories for Airflow logs
-          sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
-          sudo mkdir -p /home/ec2-user/airflow/logs/webserver
+          # Create the necessary directories for Airflow logs (ensure directories exist)
+          sudo mkdir -p /home/ubuntu/airflow/logs/scheduler
+          sudo mkdir -p /home/ubuntu/airflow/logs/webserver
+          
+          # Ensure ownership of the directories
+          sudo chown -R ubuntu:ubuntu /home/ubuntu/airflow
 
-          # Set the ownership of the Airflow directory to the ec2-user
-          sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
+          # Grant appropriate permissions
+          sudo chmod -R 755 /home/ubuntu/airflow
 
-          # Grant full permissions to the logs directory
-          sudo chmod -R 777 /home/ec2-user/airflow/logs
+          # Also ensure proper permissions for log directories
+          sudo chmod -R 777 /home/ubuntu/airflow/logs
 
       # Step 8: Start Airflow Webserver
       - name: Start Airflow Webserver
@@ -89,12 +92,12 @@ jobs:
           chmod 600 /tmp/id_rsa
 
           # Clone the repository using SSH with the private key
-          git clone git@github.com:Sharayu720.git /home/ec2-user/airflow/dags/airflow
-          cd /home/ec2-user/airflow/dags/airflow
+          git clone git@github.com:Sharayu720.git /home/ubuntu/airflow/dags/airflow
+          cd /home/ubuntu/airflow/dags/airflow
           git checkout test  # Checkout the 'test' branch
 
-          # Upload DAGs to EC2 instance (Use ec2-user for EC2)
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ec2-user/airflow/dags/
+          # Upload DAGs to EC2 instance (Use ubuntu for EC2)
+          scp -i /tmp/id_rsa -r ./dags/ ubuntu@<your-ec2-private-ip>:/home/ubuntu/airflow/dags/
 
       # Step 11: Restart Airflow Services (optional)
       - name: Restart Airflow Services
