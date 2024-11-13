@@ -3,24 +3,21 @@ name: Deploy Apache Airflow to Test Environment
 on:
   push:
     branches:
-      - test  # Trigger on push to the 'test' branch
+      - test
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest  # GitHub-hosted runner
+    runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Step 2: Set up Python environment (on GitHub runner)
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
 
-      # Step 3: Install dependencies (on GitHub runner)
       - name: Install dependencies
         run: |
           python -m venv airflow_venv
@@ -28,18 +25,11 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Debugging output (check values)
-      - name: Debug EC2 IP and SSH Key
-        run: |
-          echo "EC2 IP: ${{ secrets.EC2_IP }}"
-          echo "SSH Private Key is set: ${{ secrets.SSH_PRIVATE_KEY != '' }}"
-
-      # Step 5: SSH to EC2 instance and configure Airflow
       - name: SSH to EC2 instance and configure Airflow
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
-          ssh -T -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -52,27 +42,25 @@ jobs:
             airflow db init
 
             echo "Creating Airflow Admin user..."
-            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
+            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password "${{ secrets.AIRFLOW_ADMIN_PASSWORD }}"
 
             echo "Starting Airflow Webserver and Scheduler..."
             nohup airflow webserver -p 8080 &
             nohup airflow scheduler &
+
           EOF
 
-      # Step 6: Upload DAGs to EC2 instance (optional)
       - name: Upload DAGs to EC2 instance
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/airflow/dags/
 
-      # Step 7: Restart Airflow Services (optional)
       - name: Restart Airflow Services
         run: |
           ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-webserver"
           ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-scheduler"
 
-      # Step 8: Health check (optional)
       - name: Check Airflow Webserver Health
         run: |
           echo "Waiting for Airflow Webserver to be ready..."
