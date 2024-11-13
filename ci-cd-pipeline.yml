@@ -23,19 +23,19 @@ jobs:
       # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          python -m venv airflow_venv  # Create a virtual environment
-          source airflow_venv/bin/activate  # Activate the virtual environment
-          pip install --upgrade pip  # Upgrade pip
-          pip install -r requirements.txt  # Install dependencies from requirements.txt
+          python -m venv airflow_venv
+          source airflow_venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       # Step 4: Set up Airflow Database (SQLite for testing)
       - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
           export AIRFLOW_HOME=/home/ubuntu/airflow
-          airflow db init  # Initialize the database (using SQLite)
+          airflow db init
 
-      # Step 5: Create Airflow Admin User (optional)
+      # Step 5: Create Airflow Admin User
       - name: Create Airflow Admin User
         run: |
           source airflow_venv/bin/activate
@@ -51,29 +51,35 @@ jobs:
       - name: Install and Configure Nginx
         run: |
           sudo apt-get update
-          sudo apt-get install -y nginx  # Install Nginx
-          sudo cp nginx.conf /etc/nginx/sites-available/airflow  # Copy Nginx config
-          sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/  # Enable site
-          sudo systemctl restart nginx  # Restart Nginx
+          sudo apt-get install -y nginx
+          sudo cp nginx.conf /etc/nginx/sites-available/airflow
+          sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/
+          sudo systemctl restart nginx
 
       # Step 7: Start Airflow Webserver
       - name: Start Airflow Webserver
         run: |
           source airflow_venv/bin/activate
-          nohup airflow webserver -p 8080 &  # Start the webserver in the background
+          nohup airflow webserver -p 8080 &
 
       # Step 8: Start Airflow Scheduler
       - name: Start Airflow Scheduler
         run: |
           source airflow_venv/bin/activate
-          nohup airflow scheduler &  # Start the scheduler in the background
+          nohup airflow scheduler &
 
-      # Step 9: Health check (Check if the webserver is running)
+      # Step 9: Upload DAG files to EC2 instance
+      - name: Upload DAGs to EC2 instance
+        run: |
+          scp -i /path/to/your/key.pem -r ./dags/ ubuntu@your-ec2-ip:/home/ubuntu/airflow/dags/
+
+      # Step 10: Restart Airflow Services (optional)
+      - name: Restart Airflow Services
+        run: |
+          sudo systemctl restart airflow-webserver
+          sudo systemctl restart airflow-scheduler
+
+      # Step 11: Health check (optional)
       - name: Check Airflow Webserver Health
         run: |
-          curl --fail http://localhost:8080 || exit 1  # Verify the webserver is running
-
-      # Optional: Verify the Airflow UI
-      - name: Verify Airflow UI (Optional)
-        run: |
-          curl --fail http://localhost:8080/admin || exit 1  # Check if the Airflow UI loads
+          curl --fail http://localhost:8080 || exit 1
