@@ -32,7 +32,7 @@ jobs:
       - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ec2-user/airflow
+          export AIRFLOW_HOME=/home/ec2-user/airflow  # Ensure we're using the correct directory path
           airflow db init
 
       # Step 5: Create Airflow Admin User
@@ -59,14 +59,14 @@ jobs:
       # Step 7: Create necessary directories and set permissions
       - name: Set up directories and permissions for Airflow
         run: |
-          # Create the Airflow log directories for the EC2 user
+          # Create the necessary directories for Airflow logs
           sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
           sudo mkdir -p /home/ec2-user/airflow/logs/webserver
 
-          # Set ownership for the entire /home/ec2-user/airflow directory to ec2-user
+          # Set the ownership of the Airflow directory to the ec2-user
           sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
 
-          # Grant full permissions to the logs directory for readability/writing
+          # Grant full permissions to the logs directory
           sudo chmod -R 777 /home/ec2-user/airflow/logs
 
       # Step 8: Start Airflow Webserver
