@@ -1,6 +1,4 @@
-
-apache-airflow==2.6.2
-apache-airflow-providers-google==5.2.0
-psycopg2-binary==2.9.3
-flask==2.1.1
-# Add other dependencies for your DAGs or additional operators
+apache-airflow==2.6.1
+psycopg2-binary  # If you're using PostgreSQL as the database backend
+apache-airflow-providers-http  # If you're using HTTP operator
+airflow[postgres]  # Install Airflow with PostgreSQL support
