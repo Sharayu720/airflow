@@ -1,0 +1,78 @@
+name: Deploy Apache Airflow to Test Environment
+
+on:
+  push:
+    branches:
+      - test  # Trigger on push to the 'test' branch
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m venv airflow_venv
+          source airflow_venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up Airflow Database (SQLite)
+        run: |
+          source airflow_venv/bin/activate
+          export AIRFLOW_HOME=/home/ubuntu/airflow
+          airflow db init
+
+      - name: Create Airflow Admin User
+        run: |
+          source airflow_venv/bin/activate
+          airflow users create \
+            --username admin \
+            --firstname John \
+            --lastname Doe \
+            --email john.doe@example.com \
+            --role Admin \
+            --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
+
+      - name: Install and Configure Nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+          sudo cp nginx.conf /etc/nginx/sites-available/airflow
+          sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/
+          sudo systemctl restart nginx
+
+      - name: Start Airflow Webserver
+        run: |
+          source airflow_venv/bin/activate
+          nohup airflow webserver -p 8080 &
+
+      - name: Start Airflow Scheduler
+        run: |
+          source airflow_venv/bin/activate
+          nohup airflow scheduler &
+
+      - name: Upload DAGs to EC2 instance
+        run: |
+          echo "$SSH_PRIVATE_KEY" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          git clone git@github.com:Sharayu720/airflow.git /home/ubuntu/airflow/dags/airflow
+          cd /home/ubuntu/airflow/dags/airflow
+          git checkout test
+
+      - name: Restart Airflow Services
+        run: |
+          sudo systemctl restart airflow-webserver
+          sudo systemctl restart airflow-scheduler
+
+      - name: Check Airflow Webserver Health
+        run: |
+          curl --fail http://localhost:8080 || exit 1
