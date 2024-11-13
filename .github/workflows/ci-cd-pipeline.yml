@@ -13,25 +13,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python 3.9.10
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.9.10'
-
-      - name: Install dependencies
+      - name: Install Python 3.9 (manually)
         run: |
-          python -m venv airflow_venv
+          sudo apt-get update
+          sudo apt-get install -y python3.9 python3.9-venv python3.9-dev
+
+      - name: Set up Airflow virtual environment
+        run: |
+          python3.9 -m venv airflow_venv
           source airflow_venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: SSH to EC2 instance and configure Airflow
         run: |
-          # Save private SSH key to file and set appropriate permissions
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           
-          # SSH into EC2 instance and execute setup commands
           ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
@@ -54,16 +52,13 @@ jobs:
 
       - name: Upload DAGs to EC2 instance
         run: |
-          # Save private key to file and set appropriate permissions
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           
-          # Upload DAGs to EC2 instance
           scp -o StrictHostKeyChecking=no -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
 
       - name: Restart Airflow Services
         run: |
-          # Restart Airflow webserver and scheduler
           ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
           ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
 
