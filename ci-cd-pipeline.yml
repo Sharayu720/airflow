@@ -3,7 +3,8 @@ name: Deploy Apache Airflow to Test Environment
 on:
   push:
     branches:
-      - test  # Trigger on push to the 'test' branch
+      - test
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   deploy:
