@@ -29,7 +29,7 @@ jobs:
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
+          ssh -i /tmp/id_rsa ec2-user@10.251.158.29 << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -54,12 +54,12 @@ jobs:
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/airflow/dags/
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@10.251.158.29:/home/ec2-user/airflow/dags/
 
       - name: Restart Airflow Services
         run: |
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-webserver"
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-scheduler"
+          ssh -i /tmp/id_rsa ec2-user@10.251.158.29 "sudo systemctl restart airflow-webserver"
+          ssh -i /tmp/id_rsa ec2-user@10.251.158.29 "sudo systemctl restart airflow-scheduler"
 
       - name: Check Airflow Webserver Health
         run: |
