@@ -24,7 +24,7 @@ jobs:
             set -e  # Exit immediately if a command fails
 
             echo "Updating system and installing Python 3.9 dependencies..."
-
+            
             # Check if Python 3.9 is already installed
             if ! command -v python3.9 &>/dev/null; then
               echo "Python 3.9 is not installed. Installing..."
@@ -67,13 +67,20 @@ jobs:
             sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
             sudo chmod -R 777 /home/ec2-user/airflow/logs
 
-            echo "Initializing Airflow DB..."
+            echo "Initializing Airflow DB if not already initialized..."
             source /home/ec2-user/airflow/airflow_venv/bin/activate
             export AIRFLOW_HOME=/home/ec2-user/airflow
-            airflow db init
+            if ! airflow db check; then
+              airflow db init
+            else
+              echo "Airflow DB already initialized."
+            fi
 
-            echo "Creating Airflow Admin user..."
-            airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password "${{ secrets.AIRFLOW_ADMIN_PASSWORD }}"
+            # Create Airflow Admin user if not already created
+            if ! airflow users list | grep -q "admin"; then
+              echo "Creating Airflow Admin user..."
+              airflow users create --username admin --firstname John --lastname Doe --email john.doe@example.com --role Admin --password "${{ secrets.AIRFLOW_ADMIN_PASSWORD }}"
+            fi
 
             echo "Starting Airflow Webserver and Scheduler..."
             nohup airflow webserver -p 8080 &
@@ -114,8 +121,8 @@ jobs:
         run: |
           # Check if Airflow webserver is ready
           echo "Waiting for Airflow Webserver to be ready..."
-          for i in {1..10}; do
-            if curl --silent --fail --max-time 30 http://localhost:8080; then
+          for i in {1..5}; do
+            if curl --silent --fail --max-time 15 http://localhost:8080; then
               echo "Airflow Webserver is up and running!"
               exit 0
             else
@@ -123,5 +130,5 @@ jobs:
               sleep 5
             fi
           done
-          echo "Airflow Webserver is still not ready after 10 attempts."
+          echo "Airflow Webserver is still not ready after 5 attempts."
           exit 1
