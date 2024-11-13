@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted  # Change to use your self-hosted runner instead of 'ubuntu-latest'
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
+          python-version: '3.9.10'  # Specify a patch version (e.g., 3.9.10) for better compatibility
 
       - name: Install dependencies
         run: |
