@@ -7,17 +7,20 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: self-hosted  # Using self-hosted runner
 
     steps:
+      # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
+      # Step 2: Set up Python 3.9
+      - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'  # Use a broader version like 3.9
+          python-version: '3.9'
 
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m venv airflow_venv
@@ -25,14 +28,15 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Step 4: SSH to EC2 instance and configure Airflow
       - name: SSH to EC2 instance and configure Airflow
         run: |
-          # Save private SSH key to file and set appropriate permissions
+          echo "Starting SSH session to EC2 instance..."
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           
-          # SSH into EC2 instance and execute setup commands
-          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
+          # Enable verbose output for SSH
+          ssh -v -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -52,21 +56,23 @@ jobs:
             nohup airflow scheduler &
           EOF
 
+      # Step 5: Upload DAGs to EC2 instance
       - name: Upload DAGs to EC2 instance
         run: |
-          # Save private key to file and set appropriate permissions
+          echo "Uploading DAGs to EC2 instance..."
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
           
-          # Upload DAGs to EC2 instance
           scp -o StrictHostKeyChecking=no -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
 
+      # Step 6: Restart Airflow Services
       - name: Restart Airflow Services
         run: |
-          # Restart Airflow webserver and scheduler
+          echo "Restarting Airflow webserver and scheduler..."
           ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
           ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
 
+      # Step 7: Check Airflow Webserver Health
       - name: Check Airflow Webserver Health
         run: |
           echo "Waiting for Airflow Webserver to be ready..."
