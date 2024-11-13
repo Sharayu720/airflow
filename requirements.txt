@@ -1,4 +1,6 @@
-apache-airflow==2.6.1  # Airflow version you want to use
+apache-airflow>=2.8.0
+
 psycopg2-binary==2.9.10  # PostgreSQL driver
-apache-airflow-providers-http==4.13.2  # HTTP provider for Airflow
+apache-airflow-providers-http==4.0.0
+
 # Add other dependencies as necessary
