@@ -32,7 +32,7 @@ jobs:
       - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ubuntu/airflow  # Ensure we're using the correct directory path
+          export AIRFLOW_HOME=/home/ec2-user/airflow  # Ensure we're using the correct directory path
           airflow db init
 
       # Step 5: Create Airflow Admin User
@@ -56,21 +56,20 @@ jobs:
           sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/
           sudo systemctl restart nginx
 
-      # Step 7: Create necessary directories and set permissions
+      # Step 7: Create necessary directories and set permissions for Airflow
       - name: Set up directories and permissions for Airflow
         run: |
-          # Create the necessary directories for Airflow logs (ensure directories exist)
-          sudo mkdir -p /home/ubuntu/airflow/logs/scheduler
-          sudo mkdir -p /home/ubuntu/airflow/logs/webserver
-          
-          # Ensure ownership of the directories
-          sudo chown -R ubuntu:ubuntu /home/ubuntu/airflow
+          # Ensure that the /home/ec2-user/airflow directory exists
+          sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
+          sudo mkdir -p /home/ec2-user/airflow/logs/webserver
 
-          # Grant appropriate permissions
-          sudo chmod -R 755 /home/ubuntu/airflow
+          # Ensure that /home/ec2-user/airflow exists and set the ownership and permissions
+          sudo mkdir -p /home/ec2-user/airflow  # Create the main Airflow directory if not already created
+          sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
+          sudo chmod -R 755 /home/ec2-user/airflow  # Ensure directories have appropriate permissions
 
-          # Also ensure proper permissions for log directories
-          sudo chmod -R 777 /home/ubuntu/airflow/logs
+          # Set permissions for log directories
+          sudo chmod -R 777 /home/ec2-user/airflow/logs
 
       # Step 8: Start Airflow Webserver
       - name: Start Airflow Webserver
@@ -92,12 +91,12 @@ jobs:
           chmod 600 /tmp/id_rsa
 
           # Clone the repository using SSH with the private key
-          git clone git@github.com:Sharayu720.git /home/ubuntu/airflow/dags/airflow
-          cd /home/ubuntu/airflow/dags/airflow
+          git clone git@github.com:Sharayu720.git /home/ec2-user/airflow/dags/airflow
+          cd /home/ec2-user/airflow/dags/airflow
           git checkout test  # Checkout the 'test' branch
 
-          # Upload DAGs to EC2 instance (Use ubuntu for EC2)
-          scp -i /tmp/id_rsa -r ./dags/ ubuntu@<your-ec2-private-ip>:/home/ubuntu/airflow/dags/
+          # Upload DAGs to EC2 instance (Use ec2-user for EC2)
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ec2-user/airflow/dags/
 
       # Step 11: Restart Airflow Services (optional)
       - name: Restart Airflow Services
