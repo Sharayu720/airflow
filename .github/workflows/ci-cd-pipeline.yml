@@ -25,7 +25,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-         - name: SSH to EC2 instance and configure Airflow
+      - name: SSH to EC2 instance and configure Airflow
         run: |
           # Hard-code private SSH key and set appropriate permissions
           echo "-----BEGIN RSA PRIVATE KEY-----
@@ -77,28 +77,3 @@ LddRUD3Es9/qvzhrWiyDvr+hyOajVyo9rUgJNsanpydvER1XU2OdKyk=
             nohup airflow webserver -p 8080 &
             nohup airflow scheduler &
           EOF
-
-      - name: Upload DAGs to EC2 instance
-        run: |
-          # Upload DAGs to EC2 instance
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@10.251.158.29:/home/ec2-user/airflow/dags/
-
-      - name: Restart Airflow Services
-        run: |
-          ssh -i /tmp/id_rsa ec2-user@10.251.158.29 "sudo systemctl restart airflow-webserver"
-          ssh -i /tmp/id_rsa ec2-user@10.251.158.29 "sudo systemctl restart airflow-scheduler"
-
-      - name: Check Airflow Webserver Health
-        run: |
-          echo "Waiting for Airflow Webserver to be ready..."
-          for i in {1..10}; do
-            if curl --silent --fail http://localhost:8080; then
-              echo "Airflow Webserver is up and running!"
-              exit 0
-            else
-              echo "Attempt $i: Airflow Webserver is not ready yet. Retrying in 5 seconds..."
-              sleep 5
-            fi
-          done
-          echo "Airflow Webserver is still not ready after 10 attempts."
-          exit 1
