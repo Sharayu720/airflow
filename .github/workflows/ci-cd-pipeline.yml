@@ -25,16 +25,14 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set up SSH key and permissions
-        run: |
-          # Save private key to file and set appropriate permissions
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
-          chmod 600 /tmp/id_rsa
-
       - name: SSH to EC2 instance and configure Airflow
         run: |
+          # Save private SSH key to file and set appropriate permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          
           # SSH into EC2 instance and execute setup commands
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -56,14 +54,17 @@ jobs:
 
       - name: Upload DAGs to EC2 instance
         run: |
+          # Save private key to file and set appropriate permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          
           # Upload DAGs to EC2 instance
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/airflow/dags/
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
 
       - name: Restart Airflow Services
         run: |
-          # Restart the Airflow services
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-webserver"
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-scheduler"
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
 
       - name: Check Airflow Webserver Health
         run: |
