@@ -1,4 +1,4 @@
-name: Deploy Apache Airflow
+name: Deploy Apache Airflow to Test Environment
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest  # The type of VM the job will run on (Ubuntu in this case)
+    runs-on: ubuntu-latest
 
     steps:
       # Step 1: Checkout the code
@@ -25,17 +25,17 @@ jobs:
         run: |
           python -m venv airflow_venv  # Create a virtual environment
           source airflow_venv/bin/activate  # Activate the virtual environment
-          pip install --upgrade pip  # Upgrade pip to the latest version
-          pip install -r requirements.txt  # Install dependencies
+          pip install --upgrade pip  # Upgrade pip
+          pip install -r requirements.txt  # Install dependencies from requirements.txt
 
-      # Step 4: Set up Airflow Database
-      - name: Set up Airflow Database
+      # Step 4: Set up Airflow Database (SQLite for testing)
+      - name: Set up Airflow Database (SQLite)
         run: |
           source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ubuntu/airflow  # Set Airflow home directory
-          airflow db init  # Initialize the Airflow database
+          export AIRFLOW_HOME=/home/ubuntu/airflow
+          airflow db init  # Initialize the database (using SQLite)
 
-      # Step 5: Create Airflow Admin User (optional but recommended)
+      # Step 5: Create Airflow Admin User (optional)
       - name: Create Airflow Admin User
         run: |
           source airflow_venv/bin/activate
@@ -45,21 +45,35 @@ jobs:
             --lastname Doe \
             --email john.doe@example.com \
             --role Admin \
-            --password admin123
+            --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
 
-      # Step 6: Start Airflow Webserver
+      # Step 6: Configure Nginx for Reverse Proxy
+      - name: Install and Configure Nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx  # Install Nginx
+          sudo cp nginx.conf /etc/nginx/sites-available/airflow  # Copy Nginx config
+          sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/  # Enable site
+          sudo systemctl restart nginx  # Restart Nginx
+
+      # Step 7: Start Airflow Webserver
       - name: Start Airflow Webserver
         run: |
           source airflow_venv/bin/activate
           nohup airflow webserver -p 8080 &  # Start the webserver in the background
 
-      # Step 7: Start Airflow Scheduler
+      # Step 8: Start Airflow Scheduler
       - name: Start Airflow Scheduler
         run: |
           source airflow_venv/bin/activate
           nohup airflow scheduler &  # Start the scheduler in the background
-          
-      # Optional: Ensure that Nginx is configured properly to forward requests to the Airflow webserver
-      # (You'll need to configure Nginx on your server separately, this step ensures the reverse proxy setup works)
 
-      # Add any other necessary steps based on your infrastructure or configurations.
+      # Step 9: Health check (Check if the webserver is running)
+      - name: Check Airflow Webserver Health
+        run: |
+          curl --fail http://localhost:8080 || exit 1  # Verify the webserver is running
+
+      # Optional: Verify the Airflow UI
+      - name: Verify Airflow UI (Optional)
+        run: |
+          curl --fail http://localhost:8080/admin || exit 1  # Check if the Airflow UI loads
