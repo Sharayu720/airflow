@@ -71,8 +71,17 @@ jobs:
       # Step 9: Upload DAG files to EC2 instance
       - name: Upload DAGs to EC2 instance
         run: |
-          # Ensure to set the correct path to your private key file and EC2 instance details
-          scp -i /path/to/your/key.pem -r ./dags/ ubuntu@your-ec2-ip:/home/ubuntu/airflow/dags/
+          # Load the SSH private key from GitHub secrets
+          echo "$SSH_PRIVATE_KEY" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+
+          # Clone the repository using SSH with the private key
+          git clone git@github.com:Sharayu720.git /home/ubuntu/airflow/dags/airflow
+          cd /home/ubuntu/airflow/dags/airflow
+          git checkout test  # Checkout the 'test' branch
+
+          # Upload DAGs to EC2 instance (Use ec2-user for EC2)
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ubuntu/airflow/dags/
 
       # Step 10: Restart Airflow Services (optional)
       - name: Restart Airflow Services
