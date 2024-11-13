@@ -32,7 +32,7 @@ jobs:
           chmod 600 /tmp/id_rsa
           
           # SSH into EC2 instance and execute setup commands
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
             echo "Setting up directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -59,12 +59,13 @@ jobs:
           chmod 600 /tmp/id_rsa
           
           # Upload DAGs to EC2 instance
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
+          scp -o StrictHostKeyChecking=no -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_PRIVATE_IP }}:/home/ec2-user/airflow/dags/
 
       - name: Restart Airflow Services
         run: |
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
-          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
+          # Restart Airflow webserver and scheduler
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-webserver"
+          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} "sudo systemctl restart airflow-scheduler"
 
       - name: Check Airflow Webserver Health
         run: |
