@@ -6,21 +6,21 @@ on:
       - test  # Trigger on push to the 'test' branch
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-latest  # GitHub-hosted runner (you can also use a different runner for local CI/CD pipelines)
 
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Step 2: Set up Python environment
+      # Step 2: Set up Python environment (on GitHub runner)
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
 
-      # Step 3: Install dependencies
+      # Step 3: Install dependencies (on GitHub runner)
       - name: Install dependencies
         run: |
           python -m venv airflow_venv
@@ -28,86 +28,66 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Set up Airflow Database (SQLite for testing)
-      - name: Set up Airflow Database (SQLite)
+      # Step 4: SSH to EC2 instance for further setup
+      - name: SSH to EC2 instance and configure Airflow
         run: |
-          source airflow_venv/bin/activate
-          export AIRFLOW_HOME=/home/ec2-user/airflow  # Ensure we're using the correct directory path
-          airflow db init
-
-      # Step 5: Create Airflow Admin User
-      - name: Create Airflow Admin User
-        run: |
-          source airflow_venv/bin/activate
-          airflow users create \
-            --username admin \
-            --firstname John \
-            --lastname Doe \
-            --email john.doe@example.com \
-            --role Admin \
-            --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
-
-      # Step 6: Install and Configure Nginx for Reverse Proxy
-      - name: Install and Configure Nginx
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nginx
-          sudo cp nginx.conf /etc/nginx/sites-available/airflow
-          sudo ln -s /etc/nginx/sites-available/airflow /etc/nginx/sites-enabled/
-          sudo systemctl restart nginx
-
-      # Step 7: Create necessary directories and set permissions for Airflow
-      - name: Set up directories and permissions for Airflow
-        run: |
-          # Ensure that the /home/ec2-user/airflow directory exists
-          sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
-          sudo mkdir -p /home/ec2-user/airflow/logs/webserver
-
-          # Ensure that /home/ec2-user/airflow exists and set the ownership and permissions
-          sudo mkdir -p /home/ec2-user/airflow  # Create the main Airflow directory if not already created
-          sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
-          sudo chmod -R 755 /home/ec2-user/airflow  # Ensure directories have appropriate permissions
-
-          # Set permissions for log directories
-          sudo chmod -R 777 /home/ec2-user/airflow/logs
-
-      # Step 8: Start Airflow Webserver
-      - name: Start Airflow Webserver
-        run: |
-          source airflow_venv/bin/activate
-          nohup airflow webserver -p 8080 &
-
-      # Step 9: Start Airflow Scheduler
-      - name: Start Airflow Scheduler
-        run: |
-          source airflow_venv/bin/activate
-          nohup airflow scheduler &
-
-      # Step 10: Upload DAG files to EC2 instance
-      - name: Upload DAGs to EC2 instance
-        run: |
-          # Load the SSH private key from GitHub secrets
-          echo "$SSH_PRIVATE_KEY" > /tmp/id_rsa
+          # Add the private key for SSH access to EC2 (stored as a secret)
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
           chmod 600 /tmp/id_rsa
 
-          # Clone the repository using SSH with the private key
-          git clone git@github.com:Sharayu720.git /home/ec2-user/airflow/dags/airflow
-          cd /home/ec2-user/airflow/dags/airflow
-          git checkout test  # Checkout the 'test' branch
+          # SSH into the EC2 instance using the private key and ec2-user
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} << 'EOF'
+            # Set up Airflow directories and permissions on the EC2 instance
+            sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
+            sudo mkdir -p /home/ec2-user/airflow/logs/webserver
 
-          # Upload DAGs to EC2 instance (Use ec2-user for EC2)
-          scp -i /tmp/id_rsa -r ./dags/ ec2-user@<your-ec2-private-ip>:/home/ec2-user/airflow/dags/
+            # Ensure the Airflow home directory is properly set
+            sudo mkdir -p /home/ec2-user/airflow  # Create if it doesn't exist
+            sudo chown -R ec2-user:ec2-user /home/ec2-user/airflow
+            sudo chmod -R 755 /home/ec2-user/airflow
 
-      # Step 11: Restart Airflow Services (optional)
+            # Set permissions for log directories
+            sudo chmod -R 777 /home/ec2-user/airflow/logs
+
+            # Initialize Airflow DB if it hasn't been initialized
+            source /home/ec2-user/airflow/airflow_venv/bin/activate
+            export AIRFLOW_HOME=/home/ec2-user/airflow
+            airflow db init
+
+            # Create Airflow Admin user
+            airflow users create \
+              --username admin \
+              --firstname John \
+              --lastname Doe \
+              --email john.doe@example.com \
+              --role Admin \
+              --password ${{ secrets.AIRFLOW_ADMIN_PASSWORD }}
+
+            # Start the Airflow webserver and scheduler (background process)
+            nohup airflow webserver -p 8080 &
+            nohup airflow scheduler &
+
+          EOF
+
+      # Step 5: Upload DAGs to the EC2 instance (if needed)
+      - name: Upload DAGs to EC2 instance
+        run: |
+          # Use SCP to upload DAG files from GitHub to EC2
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+
+          # Clone repository or push DAG files via SCP
+          scp -i /tmp/id_rsa -r ./dags/ ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/airflow/dags/
+
+      # Step 6: Restart Airflow services on EC2 (optional)
       - name: Restart Airflow Services
         run: |
-          sudo systemctl restart airflow-webserver
-          sudo systemctl restart airflow-scheduler
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-webserver"
+          ssh -i /tmp/id_rsa ec2-user@${{ secrets.EC2_IP }} "sudo systemctl restart airflow-scheduler"
 
-      # Step 12: Health check (optional)
+      # Step 7: Health check (optional)
       - name: Check Airflow Webserver Health
         run: |
-          # Wait for the Airflow webserver to start and respond
           echo "Waiting for Airflow Webserver to be ready..."
           for i in {1..10}; do
             if curl --silent --fail http://localhost:8080; then
