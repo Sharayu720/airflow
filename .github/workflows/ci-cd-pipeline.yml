@@ -20,13 +20,20 @@ jobs:
           chmod 600 /tmp/id_rsa
           
           # SSH into EC2 instance and install dependencies
-          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
-            echo "Updating and installing Python 3.9 and dependencies..."
-            
-            # Update system and install dependencies using DNF (Amazon Linux 2023)
-            sudo dnf update -y
-            sudo dnf groupinstall "Development Tools" -y
-            sudo dnf install python39 python39-venv python39-devel -y
+          ssh -v -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
+            set -e  # Exit immediately if a command fails
+
+            echo "Updating system and installing Python 3.9 dependencies..."
+
+            # Check if Python 3.9 is already installed
+            if ! command -v python3.9 &>/dev/null; then
+              echo "Python 3.9 is not installed. Installing..."
+              sudo dnf update -y
+              sudo dnf groupinstall "Development Tools" -y
+              sudo dnf install python39 python39-venv python39-devel -y
+            else
+              echo "Python 3.9 is already installed."
+            fi
 
             # Check installed Python version
             python3.9 --version
@@ -51,7 +58,9 @@ jobs:
       - name: SSH to EC2 instance and configure Airflow
         run: |
           # SSH into EC2 instance and configure Airflow (init DB, create user, start services)
-          ssh -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
+          ssh -v -o StrictHostKeyChecking=no -i /tmp/id_rsa ec2-user@${{ secrets.EC2_PRIVATE_IP }} << 'EOF'
+            set -e  # Exit immediately if a command fails
+
             echo "Setting up Airflow directories and permissions..."
             sudo mkdir -p /home/ec2-user/airflow/logs/scheduler
             sudo mkdir -p /home/ec2-user/airflow/logs/webserver
@@ -69,6 +78,25 @@ jobs:
             echo "Starting Airflow Webserver and Scheduler..."
             nohup airflow webserver -p 8080 &
             nohup airflow scheduler &
+
+            # Ensure services started properly
+            sleep 10  # Give some time for Airflow services to start
+
+            # Check if webserver is running
+            if sudo systemctl is-active --quiet airflow-webserver; then
+              echo "Airflow Webserver is running."
+            else
+              echo "Airflow Webserver failed to start."
+              exit 1
+            fi
+
+            # Check if scheduler is running
+            if sudo systemctl is-active --quiet airflow-scheduler; then
+              echo "Airflow Scheduler is running."
+            else
+              echo "Airflow Scheduler failed to start."
+              exit 1
+            fi
           EOF
 
       - name: Upload DAGs to EC2 instance
@@ -87,7 +115,7 @@ jobs:
           # Check if Airflow webserver is ready
           echo "Waiting for Airflow Webserver to be ready..."
           for i in {1..10}; do
-            if curl --silent --fail http://localhost:8080; then
+            if curl --silent --fail --max-time 30 http://localhost:8080; then
               echo "Airflow Webserver is up and running!"
               exit 0
             else
